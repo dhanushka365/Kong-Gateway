@@ -137,21 +137,28 @@ services:
     image: dpage/pgadmin4:9.19
     container_name: kong-pgadmin
     restart: unless-stopped
+    user: root
     depends_on:
       kong-database:
         condition: service_healthy
       konga-database:
         condition: service_healthy
     environment:
+      # Web login (email/password) — not desktop mode
       PGADMIN_DEFAULT_EMAIL: admin@local.dev
       PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_SERVER_MODE: "True"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: "False"
     ports:
       - "5051:80"
     volumes:
       - kong_pgadmin_data:/var/lib/pgadmin
-      - ./kong/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      # Do NOT mount as /pgadmin4/servers.json — that blocks boot. Import after UI is up.
+      - ./kong/pgadmin/servers.json:/pgadmin4/servers.import.json:ro
+      - ./kong/pgadmin/pgpass:/tmp/pgpass.source:ro
+      - ./kong/pgadmin/bootstrap.sh:/pgadmin4/bootstrap.sh:ro
+    entrypoint: ["/bin/sh", "/pgadmin4/bootstrap.sh"]
     networks:
       - kong-net
 

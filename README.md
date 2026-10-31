@@ -52,10 +52,17 @@ Host ports avoid clashes with Work Order (`:8002`) and other local Kong/k8s usag
 | Email | `admin@local.dev` |
 | Password | `admin` |
 
-Pre-seeded servers in pgAdmin:
+1. Open http://localhost:5051 — you get the **pgAdmin login page** (not a DB password prompt).
+2. Sign in with:
+   - Email: `admin@local.dev`
+   - Password: `admin`
+3. After login, **Kong Postgres (config DB)** and **Konga Postgres (UI DB)** are already registered and use a saved `pgpass`, so they should connect without asking for database passwords again.
 
-- **Kong Postgres (config DB)** → host `kong-database`, user/password `kong` / `kong`
-- **Konga Postgres (UI DB)** → host `konga-database`, user/password `konga` / `konga`
+If a DB password prompt still appears once, use:
+
+- Kong DB: `kong` / `kong`
+- Konga DB: `konga` / `konga`  
+  then tick “Save password”.
 
 ### Konga
 
