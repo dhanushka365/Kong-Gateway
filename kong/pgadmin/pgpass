@@ -1,0 +1,2 @@
+kong-database:5432:kong:kong:kong
+kong-database:5432:konga:kong:kong

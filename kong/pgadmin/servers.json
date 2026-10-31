@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Kong Postgres",
+      "Group": "Servers",
+      "Host": "kong-database",
+      "Port": 5432,
+      "MaintenanceDB": "kong",
+      "Username": "kong",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpassfile"
+    }
+  }
+}
