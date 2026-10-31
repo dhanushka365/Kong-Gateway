@@ -1,10 +1,14 @@
 #!/bin/sh
 set -eu
 
-# Saved DB passwords for auto-connect after UI login (must be mode 600, owned by pgAdmin UID)
-cp /tmp/pgpass.source /var/lib/pgadmin/pgpass
-chown 5050:5050 /var/lib/pgadmin/pgpass
-chmod 600 /var/lib/pgadmin/pgpass
+# In SERVER mode, PassFile "/pgpass" is relative to the logged-in user's storage dir:
+#   /var/lib/pgadmin/storage/<email_with_@_->/
+STORAGE_DIR="/var/lib/pgadmin/storage/admin_local.dev"
+mkdir -p "$STORAGE_DIR"
+cp /tmp/pgpass.source "$STORAGE_DIR/pgpass"
+chown -R 5050:0 "$STORAGE_DIR"
+chmod 700 "$STORAGE_DIR"
+chmod 600 "$STORAGE_DIR/pgpass"
 
 # Start pgAdmin (server mode = email/password login page)
 /entrypoint.sh &
@@ -27,6 +31,13 @@ if wget -qO- http://127.0.0.1:80/misc/ping >/dev/null 2>&1; then
     --replace \
     --user admin@local.dev \
     || echo "[bootstrap] load-servers failed (may already be imported)"
+  # Ensure pgpass is still present after import (setup may recreate storage)
+  mkdir -p "$STORAGE_DIR"
+  cp /tmp/pgpass.source "$STORAGE_DIR/pgpass"
+  chown -R 5050:0 "$STORAGE_DIR"
+  chmod 700 "$STORAGE_DIR"
+  chmod 600 "$STORAGE_DIR/pgpass"
+  echo "[bootstrap] pgpass ready at $STORAGE_DIR/pgpass"
 else
   echo "[bootstrap] pgAdmin did not become ready; skipping server import"
 fi

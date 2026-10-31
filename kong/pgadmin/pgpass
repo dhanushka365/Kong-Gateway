@@ -1,2 +1,2 @@
-kong-database:5432:*:kong:kong
-konga-database:5432:*:konga:konga
+*:*:*:kong:kong
+*:*:*:konga:konga
