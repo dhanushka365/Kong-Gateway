@@ -1,14 +1,22 @@
 {
   "Servers": {
     "1": {
-      "Name": "Kong Postgres",
+      "Name": "Kong Postgres (config DB)",
       "Group": "Servers",
       "Host": "kong-database",
       "Port": 5432,
       "MaintenanceDB": "kong",
       "Username": "kong",
-      "SSLMode": "prefer",
-      "PassFile": "/tmp/pgpassfile"
+      "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "Konga Postgres (UI DB)",
+      "Group": "Servers",
+      "Host": "konga-database",
+      "Port": 5432,
+      "MaintenanceDB": "konga",
+      "Username": "konga",
+      "SSLMode": "prefer"
     }
   }
 }

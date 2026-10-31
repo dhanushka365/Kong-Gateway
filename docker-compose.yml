@@ -5,19 +5,18 @@
 # Stop:   docker compose down
 # Reset:  docker compose down -v
 #
-# URLs:
-#   Kong proxy:     http://localhost:8000
-#   Kong Admin API: http://localhost:8001
-#   Kong Manager:   http://localhost:8002  (if available in image)
+# Host ports avoid common local conflicts (workorder :8002, k8s Kong :8000):
+#   Kong proxy:     http://localhost:18000
+#   Kong Admin API: http://localhost:18001
+#   Kong Manager:   http://localhost:18002
 #   Konga UI:       http://localhost:1337
-#   pgAdmin:        http://localhost:5050  (admin@local.dev / admin)
-#   Postgres:       localhost:15432        (kong / kong)
+#   pgAdmin:        http://localhost:5051  (admin@local.dev / admin)
+#   Kong Postgres:  localhost:15432        (kong / kong)  — Kong config DB
+#   Konga Postgres: localhost:15433        (konga / konga) — Konga UI DB (PG11)
 #
-# Images (latest available as of Oct 2026):
-#   kong:3.9.4              — Kong Gateway OSS
-#   postgres:18-alpine      — PostgreSQL 18
-#   dpage/pgadmin4:9.19     — pgAdmin 4
-#   pantsel/konga:0.14.9    — Konga (last release; project archived)
+# Why two Postgres?
+#   Kong runs on modern Postgres 16.
+#   Konga 0.14.9 is archived and breaks on PG12+ (pg_constraint.consrc removed).
 #
 # Konga setup:
 #   1. Open http://localhost:1337 and register an admin user
@@ -41,11 +40,12 @@ networks:
 
 volumes:
   kong_data: {}
+  konga_data: {}
   kong_pgadmin_data: {}
 
 services:
   kong-database:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     container_name: kong-database
     restart: unless-stopped
     environment:
@@ -56,7 +56,6 @@ services:
       - "15432:5432"
     volumes:
       - kong_data:/var/lib/postgresql/data
-      - ./kong/postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - kong-net
     healthcheck:
@@ -66,10 +65,32 @@ services:
       retries: 10
       start_period: 20s
 
+  # Konga needs Postgres <= 11 (archived GUI uses removed catalog columns)
+  konga-database:
+    image: postgres:11-alpine
+    container_name: konga-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: konga
+      POSTGRES_DB: konga
+      POSTGRES_PASSWORD: konga
+    ports:
+      - "15433:5432"
+    volumes:
+      - konga_data:/var/lib/postgresql/data
+    networks:
+      - kong-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U konga -d konga"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   kong-migrations:
     image: kong:3.9.4
     container_name: kong-migrations
-    restart: "no"
+    restart: on-failure
     command: kong migrations bootstrap
     depends_on:
       kong-database:
@@ -94,16 +115,15 @@ services:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
-      # Admin reachable by Konga on the docker network (local/dev only)
       KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
       KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
     ports:
-      - "8000:8000"   # Proxy HTTP
-      - "8443:8443"   # Proxy HTTPS
-      - "8001:8001"   # Admin API
-      - "8444:8444"   # Admin API HTTPS
-      - "8002:8002"   # Kong Manager UI (when present)
+      - "18000:8000"   # Proxy HTTP
+      - "18443:8443"   # Proxy HTTPS
+      - "18001:8001"   # Admin API
+      - "18444:8444"   # Admin API HTTPS
+      - "18002:8002"   # Kong Manager UI (when present)
     networks:
       - kong-net
     healthcheck:
@@ -120,38 +140,36 @@ services:
     depends_on:
       kong-database:
         condition: service_healthy
+      konga-database:
+        condition: service_healthy
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@local.dev
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: "False"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     ports:
-      - "5050:80"
+      - "5051:80"
     volumes:
       - kong_pgadmin_data:/var/lib/pgadmin
       - ./kong/pgadmin/servers.json:/pgadmin4/servers.json:ro
-      - ./kong/pgadmin/pgpass:/tmp/pgpassfile:ro
-    entrypoint: >
-      /bin/sh -c "chmod 600 /tmp/pgpassfile &&
-      /entrypoint.sh"
     networks:
       - kong-net
 
   konga-prepare:
     image: pantsel/konga:0.14.9
     container_name: konga-prepare
-    restart: "no"
+    restart: on-failure
     depends_on:
-      kong-database:
+      konga-database:
         condition: service_healthy
     environment:
       DB_ADAPTER: postgres
-      DB_HOST: kong-database
+      DB_HOST: konga-database
       DB_PORT: "5432"
-      DB_USER: kong
-      DB_PASSWORD: kong
+      DB_USER: konga
+      DB_PASSWORD: konga
       DB_DATABASE: konga
-    command: "-c prepare -a postgres -u postgresql://kong:kong@kong-database:5432/konga"
+    command: "-c prepare -a postgres -u postgresql://konga:konga@konga-database:5432/konga"
     networks:
       - kong-net
 
@@ -168,10 +186,10 @@ services:
       NODE_ENV: production
       TOKEN_SECRET: kong-gateway-local-token-secret-change-me
       DB_ADAPTER: postgres
-      DB_HOST: kong-database
+      DB_HOST: konga-database
       DB_PORT: "5432"
-      DB_USER: kong
-      DB_PASSWORD: kong
+      DB_USER: konga
+      DB_PASSWORD: konga
       DB_DATABASE: konga
     ports:
       - "1337:1337"
