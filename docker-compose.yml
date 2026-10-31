@@ -7,8 +7,8 @@
 #
 # Host ports avoid common local conflicts (workorder :8002, k8s Kong :8000):
 #   Kong proxy:     http://localhost:18000
-#   Kong Admin API: http://localhost:18001
-#   Kong Manager:   http://localhost:18002
+#   Kong Admin API: http://localhost:18001  (basic auth: admin / admin)
+#   Kong Manager:   http://localhost:18002  (basic auth: admin / admin)
 #   Konga UI:       http://localhost:1337
 #   pgAdmin:        http://localhost:5051  (admin@local.dev / admin)
 #   Kong Postgres:  localhost:15432        (kong / kong)  — Kong config DB
@@ -121,9 +121,8 @@ services:
     ports:
       - "18000:8000"   # Proxy HTTP
       - "18443:8443"   # Proxy HTTPS
-      - "18001:8001"   # Admin API
-      - "18444:8444"   # Admin API HTTPS
-      - "18002:8002"   # Kong Manager UI (when present)
+      # Admin API + Manager are published via kong-auth (basic auth), not directly
+      - "18444:8444"   # Admin API HTTPS (internal/dev; prefer 18001 via kong-auth)
     networks:
       - kong-net
     healthcheck:
@@ -132,6 +131,23 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+
+  # OSS Kong Manager has no login — nginx basic auth in front of Manager + Admin API
+  kong-auth:
+    image: nginx:1.27-alpine
+    container_name: kong-auth
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    ports:
+      - "18002:80"   # Kong Manager (login prompt)
+      - "18001:81"   # Admin API (login / Authorization: Basic)
+    volumes:
+      - ./kong/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./kong/nginx/.htpasswd:/etc/nginx/htpasswd/.htpasswd:ro
+    networks:
+      - kong-net
 
   pgadmin:
     image: dpage/pgadmin4:9.19

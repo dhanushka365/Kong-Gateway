@@ -9,8 +9,9 @@ Local Kong API Gateway stack with PostgreSQL, pgAdmin, and Konga.
 | Component | Image | Role |
 |-----------|--------|------|
 | **Kong** | `kong:3.9.4` | API gateway (proxy + Admin API) |
+| **kong-auth** | `nginx:1.27-alpine` | Basic-auth login in front of Manager + Admin API |
 | **Kong Postgres** | `postgres:16-alpine` | Kong configuration database |
-| **Konga** | `pantsel/konga:0.14.9` | Web UI for Kong Admin API |
+| **Konga** | `pantsel/konga:0.14.9` | Web UI for Kong Admin API (has its own login) |
 | **Konga Postgres** | `postgres:11-alpine` | Konga UI metadata (PG11 required) |
 | **pgAdmin** | `dpage/pgadmin4:9.19` | Browse both Postgres databases |
 
@@ -35,14 +36,36 @@ Host ports avoid clashes with Work Order (`:8002`) and other local Kong/k8s usag
 | Service | URL |
 |---------|-----|
 | Kong proxy | http://localhost:18000 |
-| Kong Admin API | http://localhost:18001 |
-| Kong Manager | http://localhost:18002 |
+| Kong Admin API | http://localhost:18001 (basic auth) |
+| Kong Manager | http://localhost:18002 (basic auth) |
 | Konga | http://localhost:1337 |
 | pgAdmin | http://localhost:5051 |
 | Kong Postgres | `localhost:15432` |
 | Konga Postgres | `localhost:15433` |
 
 ## Login credentials
+
+### Kong Manager (dashboard)
+
+Kong OSS Manager has **no built-in login**. This stack puts **HTTP Basic Auth** in front of it via `kong-auth`.
+
+| Field | Value |
+|-------|--------|
+| URL | http://localhost:18002 |
+| Username | `admin` |
+| Password | `admin` |
+
+Open the URL → browser asks for username/password → then Manager loads.
+
+Admin API from the host also requires the same credentials:
+
+```bash
+curl -u admin:admin http://localhost:18001/
+```
+
+(Konga still talks to Kong on the Docker network at `http://kong:8001` with no basic auth.)
+
+To change the password, regenerate `kong/nginx/.htpasswd` (e.g. `py kong/nginx/gen_htpasswd.py admin NEWPASS`) and recreate `kong-auth`.
 
 ### pgAdmin
 
